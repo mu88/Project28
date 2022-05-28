@@ -64,21 +64,29 @@
             Logger.MethodStarted();
             _objRef = DotNetObjectReference.Create(this);
             await InitializeMapAsync(_objRef);
+            await SetupMarkerStylesForCreatorsAsync(_distinctCreators);
             await AddMarkersForExistingLocationsAsync();
             Logger.MethodFinished();
         }
     }
 
     /// <inheritdoc />
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Logger.MethodStarted();
 
-        base.OnInitialized();
+        await base.OnInitializedAsync();
 
         _distinctCreators = LifePointService.GetDistinctCreators();
         _distinctYears = LifePointService.GetDistinctYears();
 
+        Logger.MethodFinished();
+    }
+
+    private async Task SetupMarkerStylesForCreatorsAsync(IEnumerable<ExistingPerson> distinctCreators)
+    {
+        Logger.MethodStarted();
+        await _lifePointDetailModule.InvokeVoidAsync("setupMarkerStylesForCreators", distinctCreators.Select(creator => creator.Id));
         Logger.MethodFinished();
     }
 
@@ -91,8 +99,8 @@
     }
 
     [JSInvokable]
-    public async Task AddMarkerAsync(Guid id, double latitude, double longitude)
-        => await _lifePointDetailModule.InvokeVoidAsync("createMarkerForExistingLifePoint", _leafletMap, id, latitude, longitude);
+    public async Task AddMarkerAsync(Guid id, double latitude, double longitude, Guid createdBy)
+        => await _lifePointDetailModule.InvokeVoidAsync("createMarkerForExistingLifePoint", _leafletMap, id, createdBy, latitude, longitude);
 
     private async Task InitializeMapAsync(DotNetObjectReference<Map> dotNetObjectReference)
     {
@@ -107,8 +115,8 @@
     {
         Logger.MethodStarted();
 
-        foreach (var (latitude, longitude, id) in LifePointService.GetAllLocations())
-            await AddMarkerAsync(id, latitude, longitude);
+        foreach (var (latitude, longitude, id, createdBy) in LifePointService.GetAllLocations())
+            await AddMarkerAsync(id, latitude, longitude, createdBy);
 
         Logger.MethodFinished();
     }

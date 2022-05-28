@@ -113,13 +113,17 @@ internal class Storage : DbContext, IStorage
     {
         _logger.SeedingData();
 
-        var person = (await AddAsync(new Person("Ultras Dynamo"))).Entity;
-        await AddAsync(new LifePoint(new DateOnly(1953, 4, 12),
-                                     "Nur die SGD!",
-                                     "Wahre Liebe kennt keine Liga",
-                                     51.0405849,
-                                     13.7478431,
-                                     person));
+        for (int i = 0; i < 20; i++)
+        {
+            var person = (await AddAsync(new Person(i.ToString()))).Entity;
+            await AddAsync(new LifePoint(new DateOnly(1953, 4, 12),
+                                         i.ToString(),
+                                         "Wahre Liebe kennt keine Liga",
+                                         Random.Shared.Next(-90, 90),
+                                         Random.Shared.Next(-180, 180),
+                                         person));
+        }
+
         await SaveChangesAsync();
     }
 

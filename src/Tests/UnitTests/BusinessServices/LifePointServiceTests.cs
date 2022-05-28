@@ -32,6 +32,7 @@ public class LifePointServiceTests
                             options => options.Including(x => x.Id)
                                 .Including(x => x.Latitude)
                                 .Including(x => x.Longitude));
+        results.Select(location => location.CreatedBy).Should().BeEquivalentTo(lifePoints.Select(point => point.CreatedBy.Id));
     }
 
     [Test]

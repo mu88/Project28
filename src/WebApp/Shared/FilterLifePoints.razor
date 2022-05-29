@@ -1,0 +1,125 @@
+﻿@using Logging.Extensions
+@using BusinessServices.Services
+@using DTO.Person
+@using Microsoft.Extensions.Logging
+@* TODO mu88: Write tests *@
+@* TODO mu88: Update distinct years when creating new LifePoint *@
+@inject ILifePointService LifePointService
+@inject IStringLocalizer<Main> Loc
+@inject ILogger<FilterLifePoints> Logger
+@inject IJSRuntime JsRuntime
+
+@if (_showFilter)
+{
+    @if (_distinctCreators.Any())
+    {
+        <label for="distinctCreator">@Loc["CreatedBy"]: </label>
+        <select id="distinctCreator" @onchange="SelectedCreatorChangedAsync">
+            <option value="@DefaultCreatorId">@DefaultCreatorIdText</option>
+            @foreach (var (id, name) in _distinctCreators)
+            {
+                <option value="@id">@name</option>
+            }
+        </select>
+    }
+    @if (_distinctYears.Any())
+    {
+        <label for="distinctYear">@Loc["CreatedIn"]: </label>
+        <select id="distinctYear" @onchange="SelectedYearChangedAsync">
+            <option value="@DefaultYear">@DefaultYearText</option>
+            @foreach (var distinctYear in _distinctYears)
+            {
+                <option value="@distinctYear">@distinctYear</option>
+            }
+        </select>
+    }
+}
+<img src="filter.png" alt="The filter button" @onclick="OnFilterButtonClickAsync"/>
+
+@code {
+    // Will be initialized on startup
+#pragma warning disable 8618
+    private IJSObjectReference _lifePointDetailModule;
+#pragma warning restore 8618
+    private IEnumerable<ExistingPerson> _distinctCreators = new List<ExistingPerson>();
+    private IEnumerable<int> _distinctYears = new List<int>();
+    private bool _showFilter;
+    private bool _filterApplied;
+    private int? _selectedYear;
+    private Guid? _selectedCreatorId;
+        const int DefaultYear = -1;
+    private static readonly Guid DefaultCreatorId = Guid.Empty;
+        const string DefaultYearText = "---";
+        const string DefaultCreatorIdText = "---";
+
+    /// <inheritdoc />
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.MethodStarted();
+
+        await base.OnInitializedAsync();
+
+        _distinctCreators = LifePointService.GetDistinctCreators();
+        _distinctYears = LifePointService.GetDistinctYears();
+        _lifePointDetailModule = await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./Shared/LifePointDetail.razor.js");
+
+        Logger.MethodFinished();
+    }
+
+    private async Task SelectedCreatorChangedAsync(ChangeEventArgs args)
+    {
+        if (!Guid.TryParse(args.Value?.ToString(), out var creatorId)) return;
+
+        if (_selectedCreatorId == creatorId) { return; }
+
+        _selectedCreatorId = creatorId;
+        _filterApplied = true;
+
+        _distinctYears = LifePointService.GetDistinctYears(_selectedCreatorId);
+
+        await DrawSubsetOfMarkersAsync();
+    }
+
+    private async Task SelectedYearChangedAsync(ChangeEventArgs args)
+    {
+        if (!int.TryParse(args.Value?.ToString(), out var year)) return;
+
+        if (_selectedYear == year) { return; }
+
+        _selectedYear = year;
+        _filterApplied = true;
+
+        _distinctCreators = LifePointService.GetDistinctCreators(_selectedYear);
+
+        await DrawSubsetOfMarkersAsync();
+    }
+
+    private async Task DrawSubsetOfMarkersAsync()
+    {
+        await RemoveAllExistingMarkersAsync();
+
+        var yearToFilter = _selectedYear == DefaultYear ? null : _selectedYear;
+        var creatorIdToFilter = _selectedCreatorId == DefaultCreatorId ? null : _selectedCreatorId;
+
+        foreach (var (latitude, longitude, id) in LifePointService.GetAllLocations(yearToFilter, creatorIdToFilter))
+            await AddMarkerAsync(id, latitude, longitude);
+    }
+
+    private async Task RemoveAllExistingMarkersAsync() => await _lifePointDetailModule.InvokeVoidAsync("reset");
+
+    private async Task AddMarkerAsync(Guid id, double latitude, double longitude)
+        => await _lifePointDetailModule.InvokeVoidAsync("createMarkerForExistingLifePoint", id, latitude, longitude);
+
+    private async Task OnFilterButtonClickAsync()
+    {
+        _showFilter = !_showFilter;
+
+        if (!_showFilter && _filterApplied)
+        {
+            await RemoveAllExistingMarkersAsync();
+
+            foreach (var (latitude, longitude, id) in LifePointService.GetAllLocations()) await AddMarkerAsync(id, latitude, longitude);
+        }
+    }
+
+}

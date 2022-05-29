@@ -1,7 +1,6 @@
 ﻿@using Logging.Extensions
 @using BusinessServices.Services
 @using DTO.Location
-@using DTO.Person
 @using Persistence
 @using Microsoft.Extensions.Logging
 @inject IJSRuntime JsRuntime
@@ -15,31 +14,6 @@
 {
     <UserDialog OnClose="OnUserDialogClose"/>
 }
-<div>
-    @if (false)
-    {
-        @if (_distinctCreators.Any())
-        {
-            <label for="distinctCreator">@Loc["CreatedBy"]: </label>
-            <select id="distinctCreator" @onchange="SelectedCreatorChanged">
-                @foreach (var (id, name) in _distinctCreators)
-                {
-                    <option value="@id">@name</option>
-                }
-            </select>
-        }
-        @if (_distinctYears.Any())
-        {
-            <label for="distinctYear">@Loc["CreatedIn"]: </label>
-            <select id="distinctYear" @onchange="SelectedYearChanged">
-                @foreach (var distinctYear in _distinctYears)
-                {
-                    <option value="@distinctYear">@distinctYear</option>
-                }
-            </select>
-        }
-    }
-</div>
 
 <div id="mapid"></div>
 
@@ -54,8 +28,6 @@
 #pragma warning restore 8618
     private IReadOnlyList<ExistingLocation> _allLocations = new List<ExistingLocation>();
     private DotNetObjectReference<Map>? _objRef;
-    private IEnumerable<ExistingPerson> _distinctCreators = new List<ExistingPerson>();
-    private IEnumerable<int> _distinctYears = new List<int>();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -69,19 +41,6 @@
         }
     }
 
-    /// <inheritdoc />
-    protected override void OnInitialized()
-    {
-        Logger.MethodStarted();
-
-        base.OnInitialized();
-
-        _distinctCreators = LifePointService.GetDistinctCreators();
-        _distinctYears = LifePointService.GetDistinctYears();
-
-        Logger.MethodFinished();
-    }
-
     [JSInvokable]
     public async Task OpenPopupForNewLifePointAsync(double latitude, double longitude)
     {
@@ -92,7 +51,7 @@
 
     [JSInvokable]
     public async Task AddMarkerAsync(Guid id, double latitude, double longitude)
-        => await _lifePointDetailModule.InvokeVoidAsync("createMarkerForExistingLifePoint", _leafletMap, id, latitude, longitude);
+        => await _lifePointDetailModule.InvokeVoidAsync("createMarkerForExistingLifePoint", id, latitude, longitude);
 
     private async Task InitializeMapAsync(DotNetObjectReference<Map> dotNetObjectReference)
     {
@@ -101,26 +60,19 @@
 
         _newLifePointModule = await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./Shared/NewLifePoint.razor.js");
         _lifePointDetailModule = await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./Shared/LifePointDetail.razor.js");
+
+        await _lifePointDetailModule.InvokeVoidAsync("initialize", _leafletMap);
     }
 
     private async Task AddMarkersForExistingLocationsAsync()
     {
         Logger.MethodStarted();
 
+    // TODO mu88: Rethink whether adding all markers at once provides better performance on redraw
         foreach (var (latitude, longitude, id) in LifePointService.GetAllLocations())
             await AddMarkerAsync(id, latitude, longitude);
 
         Logger.MethodFinished();
-    }
-
-    private void SelectedCreatorChanged(ChangeEventArgs args)
-    {
-    // TODO mu88: Redraw
-    }
-
-    private void SelectedYearChanged(ChangeEventArgs args)
-    {
-    // TODO mu88: Redraw
     }
 
     private void OnUserDialogClose() => StateHasChanged();
